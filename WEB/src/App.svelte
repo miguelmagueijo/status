@@ -40,12 +40,12 @@
             </p>
         </div>
         <div class="flex justify-center items-center">
-            <a href="https://github.com/miguelmagueijo/status" target="_blank">
+            <a href="https://github.com/miguelmagueijo" target="_blank">
                 <Icon icon="mdi:github" class="size-8"/>
             </a>
         </div>
         <div class="flex justify-end">
-            <a href="https://github.com/miguelmagueijo" target="_blank" class="underline text-sm">
+            <a href="https://github.com/miguelmagueijo/status" target="_blank" class="underline text-sm">
                 Source code
             </a>
         </div>
