@@ -8,8 +8,6 @@
         url?: string;
     }
 
-    const today = new Date();
-
     const {title, services, url}: Props = $props();
 </script>
 
