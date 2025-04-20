@@ -22,12 +22,12 @@
             </a>
         {/if}
     </div>
-    {#each services as service, idx}
+    {#each services as service}
         <div class="mt-4">
-            <h3 class="text-[#00b9b9] font-bold">
+            <h3 class="text-[#00b9b9] font-bold text-lg">
                 {service}
             </h3>
-            <div class="p-4 rounded bg-[#204059] mt-2 h-12 flex items-center gap-1.5">
+            <div class="p-4 rounded bg-[#204059] mt-2 h-12 flex items-center gap-1.5 justify-center">
                 {#each {length: 48} as _, i}
                     <span class="block h-5 w-[10px] rounded bg-white/50" title={"Time: " + i}></span>
                 {/each}
