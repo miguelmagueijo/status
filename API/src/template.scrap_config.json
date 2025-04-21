@@ -1,0 +1,14 @@
+[
+  {
+    "app": "your_app_name",
+    "service": "your_service_name",
+    "url": "https://your.url.com",
+    "interval": "60"
+  },
+  {
+    "app": "your_app_name",
+    "service": "your_second_service",
+    "url": "https://your.secondurl.com",
+    "interval": "120"
+  }
+]
