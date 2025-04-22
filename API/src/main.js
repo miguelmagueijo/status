@@ -1,47 +1,151 @@
 import Fastify from "fastify";
 import Database from "better-sqlite3";
-import { readFileSync } from "fs";
-
-class JobConfig {
-    numErrors = 0;
-    timeOfLastError = null;
-
-    constructor(jobID) {
-        this.jobID = jobID;
-    }
-}
+import {readFileSync} from "fs";
+import "dotenv/config";
+import {randomBytes} from "node:crypto";
 
 const registeredAppsServices = new Map();
+const rebootCodesMap = new Map();
 const jobs = {};
 const fastify = Fastify({
     logger: true
 });
 const db = new Database("./data/status.sqlite");
 
+class JobConfig {
+    numErrors = 0;
+    timeOfLastError = null;
+    isSuspended = false;
+    rebootCode = null;
 
-async function updateServiceStatus(url, app_id, service_id) {
-    try {
-        const res = await fetch(url, {
-            method: "GET",
-            headers: {
-                "X-IS-MM-STATUS-JOB": "1",
-            },
-        });
+    constructor(appName, serviceName, url, jobInterval) {
+        this.jobInterval = jobInterval;
+        this.appName = appName;
+        this.serviceName = serviceName;
+        this.url = url;
 
-        if (res.status === 200) {
-            console.log("Success for ", app_id, service_id);
-        } else {
-            console.error("Error for ", app_id, service_id);
+        this.job = setInterval(() => this.updateServiceStatus(), this.jobInterval * 1000);
+    }
+
+    restartService() {
+        if (!this.isSuspended || !this.rebootCode || this.job) {
+            return true;
         }
 
-        const stmt = db.prepare("INSERT INTO status (app, service, status_code, created_at) VALUES (?, ?, ?, ?)");
-        stmt.run(app_id, service_id, res.status, new Date().toISOString());
-    } catch (e) {
-        console.error(e);
-        console.log(url, app_id, service_id);
-        process.exit(1);
+        const stmt = db.prepare("UPDATE reboot_code SET was_used = TRUE WHERE id = ?");
+        stmt.run(this.rebootCode);
+
+        this.job = setInterval(() => this.updateServiceStatus(), this.jobInterval * 1000);
+        this.isSuspended = false;
+        this.numErrors = 0;
+
+        rebootCodesMap.delete(this.rebootCode);
+        this.rebootCode = null;
+
+        return true;
+    }
+
+    async updateServiceStatus() {
+        if (this.isSuspended) {
+            return;
+        }
+
+        let statusCode = -1;
+
+        try {
+            const res = await fetch(this.url, {
+                method: "GET",
+                headers: {
+                    "X-IS-MM-STATUS-JOB": "1",
+                },
+                signal: AbortSignal.timeout(5000),
+            });
+
+            if (res.status === 200) {
+                console.log("Status request - success for ", this.appName, this.serviceName);
+            } else {
+                console.error("Status request - error for ", this.appName, this.serviceName);
+                this.errorHandler(res.status);
+            }
+
+            statusCode = res.status;
+        } catch (e) {
+            console.error(e);
+            console.error(this.appName, this.serviceName, this.url, this.isSuspended, this.rebootCode, this.numErrors);
+            this.errorHandler(-1);
+        } finally {
+            const stmt = db.prepare("INSERT INTO status (app, service, status_code, created_at) VALUES (?, ?, ?, ?)");
+            stmt.run(this.appName, this.serviceName, statusCode, new Date().toISOString());
+        }
+    }
+
+    async errorHandler(statusCode) {
+        if (this.isSuspended) {
+            return;
+        }
+
+        this.numErrors++;
+        this.timeOfLastError = new Date();
+
+        const embeds = [];
+
+        if (this.numErrors > 3) {
+            this.isSuspended = true;
+            clearInterval(this.job);
+            this.job = null;
+            this.rebootCode = randomBytes(32).toString("hex");
+            embeds.push({
+                "title": `Service ${this.appName}-${this.serviceName} was suspended!`,
+                "description": `This service was suspended because it reached a maximum of 3 errors. To restart it you must click the following link:\n
+                https://status.miguelmagueijo.pt/api/v1/reboot/${this.rebootCode}`,
+                "color": 7419530,
+                "fields": [],
+                "footer": {
+                    "text": `Automated message`,
+                }
+            });
+
+            console.warn(`Service ${this.serviceName} of ${this.appName} was suspended. Code to reboot job: ${this.rebootCode}`);
+
+            const stmt = db.prepare("INSERT INTO reboot_code (id, app, service, created_at) VALUES (?, ?, ?, ?)");
+            stmt.run(this.rebootCode, this.appName, this.serviceName, new Date().toISOString());
+
+            rebootCodesMap.set(this.rebootCode, this);
+        } else {
+            const description = `Returned the following error status code \`${statusCode}\`.
+                \n**Service link** (${this.url})\n
+                [Status web page](https://status.miguelmagueijo.pt)`;
+
+            embeds.push({
+                "title": `${this.appName}-${this.serviceName} is down!`,
+                "description": description,
+                "color": 16711684,
+                "fields": [],
+                "footer": {
+                    "text": `Automated message, error num.${this.numErrors}`,
+                }
+            });
+        }
+
+        try {
+            await fetch(process.env.DISCORD_WEBHOOK_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    "attachments": [],
+                    "components": [],
+                    "content": "",
+                    "embeds": embeds
+                })
+            });
+        } catch (e) {
+            console.error(e);
+        }
     }
 }
+
 
 async function startScrapJobs() {
     const configData = JSON.parse(readFileSync("./src/scrap_config.json", "utf8"));
@@ -53,39 +157,68 @@ async function startScrapJobs() {
             registeredAppsServices.get(conf.app).add(conf.service);
         }
 
-        jobs[`${conf.app}:${conf.service}`] = new JobConfig(setInterval(() => {
-            updateServiceStatus(conf.url, conf.app, conf.service);
-        }, conf.interval * 1000));
+        jobs[`${conf.app}:${conf.service}`] = new JobConfig(conf.app, conf.service, conf.url, conf.interval);
     }
 }
 
 db.exec(`
     DROP TABLE IF EXISTS status;
-    CREATE TABLE status (
-        id INTEGER PRIMARY KEY,
-        app TEXT NOT NULL,
-        service TEXT NOT NULL,
-        status_code INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    CREATE TABLE status
+    (
+        id          INTEGER PRIMARY KEY,
+        app         TEXT     NOT NULL,
+        service     TEXT     NOT NULL,
+        status_code INTEGER  NOT NULL,
+        created_at  DATETIME NOT NULL
     );
-    CREATE INDEX idx_app_status ON status(app);
-    CREATE INDEX idx_service_status ON status(service);
+    CREATE INDEX idx_app_status ON status (app);
+    CREATE INDEX idx_service_status ON status (service);
+
+    DROP TABLE IF EXISTS reboot_code;
+    CREATE TABLE reboot_code
+    (
+        id         TEXT PRIMARY KEY,
+        app        TEXT     NOT NULL,
+        service    TEXT     NOT NULL,
+        was_used   BOOLEAN  NOT NULL DEFAULT FALSE,
+        created_at DATETIME NOT NULL
+    );
+    CREATE INDEX idx_app_rebootCode ON reboot_code (app);
+    CREATE INDEX idx_service_rebootCode ON reboot_code (service);
 `);
 
 fastify.get("/status", async (request, reply) => {
-    return { message: "Alive" };
+    return {message: "Alive"};
 });
 
 fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
-    const { app_id, service_id } = request.params;
+    const {app_id, service_id} = request.params;
 
     if (!registeredAppsServices[app_id] || !registeredAppsServices[app_id].has(service_id)) {
         reply.status(404);
-        return { message: "App and service not found" };
+        return {message: "App and service not found"};
     }
 
     reply.status(500);
-    return { message: "Not yet implemented" };
+    return {message: "Not yet implemented"};
+});
+
+fastify.get("/v1/reboot/:code", async (request, reply) => {
+    const {code} = request.params;
+
+    if (!rebootCodesMap.has(code)) {
+        reply.status(404);
+        return {message: "Reboot code not found!"};
+    }
+
+    const jobConfig = rebootCodesMap.get(code);
+    if (jobConfig.restartService()) {
+        reply.status(200);
+        return {message: `The status check of ${jobConfig.appName}-${jobConfig.serviceName} was successfully rebooted`};
+    } else {
+        reply.status(500);
+        return {message: `Fail to reboot status check of ${jobConfig.appName}-${jobConfig.serviceName}`};
+    }
 });
 
 const start = async () => {
