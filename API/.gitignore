@@ -1,5 +1,5 @@
 .idea/
 node_modules/
 data/
-src/scrap_config.json
 .env
+src/apps_services.json

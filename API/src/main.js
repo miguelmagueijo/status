@@ -1,11 +1,13 @@
+import "dotenv/config";
+import {readFileSync} from "fs";
+import {randomBytes} from "node:crypto";
 import Fastify from "fastify";
 import Database from "better-sqlite3";
-import {readFileSync} from "fs";
-import "dotenv/config";
-import {randomBytes} from "node:crypto";
 
 const rebootCodesMap = new Map();
 const jobs = new Map();
+const appServicesMap = new Map();
+const runVersion = process.env.npm_package_version;
 const fastify = Fastify({
     logger: true
 });
@@ -128,10 +130,6 @@ class JobConfig {
         }
 
         try {
-            if (true) {
-                return;
-            }
-
             await fetch(process.env.DISCORD_WEBHOOK_URL, {
                 method: "POST",
                 headers: {
@@ -152,10 +150,22 @@ class JobConfig {
 
 
 async function startScrapJobs() {
-    const configData = JSON.parse(readFileSync("./src/scrap_config.json", "utf8"));
+    const configData = JSON.parse(readFileSync("./src/apps_services.json", "utf8"));
 
-    for (const conf of configData) {
-        jobs.set(`${conf.app}:${conf.service}`, new JobConfig(conf.app, conf.service, conf.url, conf.interval));
+    for (const [appKey, appData] of Object.entries(configData)) {
+        let publicAppData = {
+            name: appData.name,
+            url: appData.visit_url,
+            services: {}
+        }
+
+        for (const [serviceKey, serviceData] of Object.entries(appData.services)) {
+            jobs.set(`${appKey}:${serviceKey}`, new JobConfig(appKey, serviceKey, serviceData.url, serviceData.interval));
+
+            publicAppData.services[serviceKey] = serviceData.name;
+        }
+
+        appServicesMap.set(appKey, publicAppData);
     }
 }
 
@@ -187,6 +197,13 @@ db.exec(`
 
 fastify.get("/status", async (request, reply) => {
     return {message: "Alive"};
+});
+
+fastify.get("/v1/apps-and-services", async (request, reply) => {
+    return {
+        map: Object.fromEntries(appServicesMap),
+        version: runVersion,
+    };
 });
 
 fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {

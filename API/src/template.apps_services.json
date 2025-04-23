@@ -1,0 +1,13 @@
+{
+  "your_app_name": {
+    "name": "App name visible in the website",
+    "visit_url": "hyperlink to put in web, null if you don't want to expose",
+    "services": {
+      "your_service_name": {
+        "name": "Service name visible in the website",
+        "url": "https://route.that.returns.code.200/",
+        "interval": "number of seconds, default would be 300"
+      }
+    }
+  }
+}
