@@ -64,13 +64,11 @@ class JobConfig {
             if (res.status === 200) {
                 this.isAlive = true;
             } else {
-                this.isAlive = false;
                 this.errorHandler(res.status);
             }
 
             statusCode = res.status;
         } catch (e) {
-            this.isAlive = false;
             console.error(e);
             console.error(this.appName, this.serviceName, this.url, this.isSuspended, this.rebootCode, this.numErrors);
             this.errorHandler(-1);
@@ -85,6 +83,7 @@ class JobConfig {
             return;
         }
 
+        this.isAlive = false;
         this.numErrors++;
         this.timeOfLastError = new Date();
 
@@ -129,6 +128,10 @@ class JobConfig {
         }
 
         try {
+            if (true) {
+                return;
+            }
+
             await fetch(process.env.DISCORD_WEBHOOK_URL, {
                 method: "POST",
                 headers: {
@@ -194,8 +197,60 @@ fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
         return {message: `Status check of ${app_id}-${service_id} not found`};
     }
 
-    reply.status(500);
-    return {message: "Not yet implemented"};
+    const jobConfig = jobs.get(`${app_id}:${service_id}`);
+    const now = new Date().toISOString();
+
+    // Hour
+    const hoursStmt = db.prepare(`
+        SELECT strftime('%Y/%m/%d %H', created_at)                 AS date_id,
+               count(id)                                           AS total_checks,
+               SUM(CASE WHEN status_code = 200 THEN 1 ELSE 0 END)  AS total_success,
+               SUM(CASE WHEN status_code != 200 THEN 1 ELSE 0 END) AS total_fail
+        FROM status
+        WHERE created_at > datetime(?, '-12 hours') AND app = ? AND service = ?
+        GROUP BY date_id
+        ORDER BY date_id DESC;
+    `);
+
+    const hoursData = hoursStmt.all(now, jobConfig.appName, jobConfig.serviceName);
+
+    // Days
+    const daysStmt = db.prepare(`
+        SELECT date(created_at)                                    AS date_id,
+               count(id)                                           AS total_checks,
+               SUM(CASE WHEN status_code = 200 THEN 1 ELSE 0 END)  AS total_success,
+               SUM(CASE WHEN status_code != 200 THEN 1 ELSE 0 END) AS total_fail
+        FROM status
+        WHERE date(?, '-1 day') >= date_id AND date(?, '-35 day') <= date_id AND app = ? AND service = ?
+        GROUP BY date_id
+        ORDER BY date_id DESC;
+    `);
+
+    const daysData = daysStmt.all(now, now, jobConfig.appName, jobConfig.serviceName);
+
+    // Uptime
+    const uptimeStmt = db.prepare(`
+        SELECT ROUND(SUM(CASE WHEN status_code = 200 THEN 1.0 ELSE 0.0 END) / count(id) * 100, 5) AS uptime_percentage
+        FROM status
+        WHERE created_at > datetime(?, '-45 days') AND app = ? AND service = ?
+        GROUP BY app, service;
+    `);
+
+    let uptimeData = uptimeStmt.get(now, jobConfig.appName, jobConfig.serviceName);
+    let uptimePercentage = null;
+    if (uptimeData) {
+        uptimePercentage = uptimeData.uptime_percentage;
+    }
+
+    reply.status(200);
+    return {
+        message: "Successfully got the status",
+        isAlive: jobConfig.isAlive,
+        isSuspended: jobConfig.isSuspended,
+        hourData: hoursData,
+        daysData: daysData,
+        uptimePercentage: uptimePercentage,
+    };
 });
 
 fastify.get("/v1/reboot/:code", async (request, reply) => {
