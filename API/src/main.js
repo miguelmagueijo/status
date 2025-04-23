@@ -70,6 +70,7 @@ class JobConfig {
 
             statusCode = res.status;
         } catch (e) {
+            this.isAlive = false;
             console.error(e);
             console.error(this.appName, this.serviceName, this.url, this.isSuspended, this.rebootCode, this.numErrors);
             this.errorHandler(-1);
