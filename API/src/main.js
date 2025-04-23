@@ -4,9 +4,8 @@ import {readFileSync} from "fs";
 import "dotenv/config";
 import {randomBytes} from "node:crypto";
 
-const registeredAppsServices = new Map();
 const rebootCodesMap = new Map();
-const jobs = {};
+const jobs = new Map();
 const fastify = Fastify({
     logger: true
 });
@@ -17,6 +16,7 @@ class JobConfig {
     timeOfLastError = null;
     isSuspended = false;
     rebootCode = null;
+    isAlive = false;
 
     constructor(appName, serviceName, url, jobInterval) {
         this.jobInterval = jobInterval;
@@ -62,9 +62,9 @@ class JobConfig {
             });
 
             if (res.status === 200) {
-                console.log("Status request - success for ", this.appName, this.serviceName);
+                this.isAlive = true;
             } else {
-                console.error("Status request - error for ", this.appName, this.serviceName);
+                this.isAlive = false;
                 this.errorHandler(res.status);
             }
 
@@ -151,13 +151,7 @@ async function startScrapJobs() {
     const configData = JSON.parse(readFileSync("./src/scrap_config.json", "utf8"));
 
     for (const conf of configData) {
-        if (!registeredAppsServices.has(conf.app)) {
-            registeredAppsServices.set(conf.app, new Set([conf.service]));
-        } else {
-            registeredAppsServices.get(conf.app).add(conf.service);
-        }
-
-        jobs[`${conf.app}:${conf.service}`] = new JobConfig(conf.app, conf.service, conf.url, conf.interval);
+        jobs.set(`${conf.app}:${conf.service}`, new JobConfig(conf.app, conf.service, conf.url, conf.interval));
     }
 }
 
@@ -194,9 +188,9 @@ fastify.get("/status", async (request, reply) => {
 fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
     const {app_id, service_id} = request.params;
 
-    if (!registeredAppsServices[app_id] || !registeredAppsServices[app_id].has(service_id)) {
+    if (!jobs.has(`${app_id}:${service_id}`)) {
         reply.status(404);
-        return {message: "App and service not found"};
+        return {message: `Status check of ${app_id}-${service_id} not found`};
     }
 
     reply.status(500);
