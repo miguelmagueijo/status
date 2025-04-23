@@ -1,5 +1,5 @@
 {
-  "name": "status",
+  "name": "mm-status-api",
   "version": "1.1.0",
   "description": "REST API to check the status of multiple services. It checks if the response code is 200, if not, acts like an error",
   "scripts": {
