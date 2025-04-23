@@ -195,11 +195,11 @@ db.exec(`
     CREATE INDEX idx_service_rebootCode ON reboot_code (service);
 `);
 
-fastify.get("/status", async (request, reply) => {
+fastify.get("/status", async () => {
     return {message: "Alive"};
 });
 
-fastify.get("/v1/apps-and-services", async (request, reply) => {
+fastify.get("/v1/apps-and-services", async () => {
     return {
         map: Object.fromEntries(appServicesMap),
         version: runVersion,
