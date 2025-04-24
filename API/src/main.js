@@ -4,6 +4,7 @@ import {randomBytes} from "node:crypto";
 import Fastify from "fastify";
 import Database from "better-sqlite3";
 
+const numberOfDaysToShow = 35;
 const rebootCodesMap = new Map();
 const jobs = new Map();
 const appServicesMap = new Map();
@@ -26,7 +27,7 @@ class JobConfig {
         this.serviceName = serviceName;
         this.url = url;
 
-        this.job = setInterval(() => this.updateServiceStatus(), this.jobInterval * 1000);
+        // this.job = setInterval(() => this.updateServiceStatus(), this.jobInterval * 1000);
     }
 
     restartService() {
@@ -203,6 +204,7 @@ fastify.get("/v1/apps-and-services", async () => {
     return {
         map: Object.fromEntries(appServicesMap),
         version: runVersion,
+        days: numberOfDaysToShow,
     };
 });
 
@@ -238,7 +240,7 @@ fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
                SUM(CASE WHEN status_code = 200 THEN 1 ELSE 0 END)  AS total_success,
                SUM(CASE WHEN status_code != 200 THEN 1 ELSE 0 END) AS total_fail
         FROM status
-        WHERE date(?, '-1 day') >= date_id AND date(?, '-35 day') <= date_id AND app = ? AND service = ?
+        WHERE date(?, '-1 day') >= date_id AND date(?, '-${numberOfDaysToShow} day') <= date_id AND app = ? AND service = ?
         GROUP BY date_id
         ORDER BY date_id DESC;
     `);
