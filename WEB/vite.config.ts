@@ -7,6 +7,7 @@ import { env } from "process";
 export default defineConfig({
     plugins: [svelte(), tailwindcss()],
     define: {
-        "__APP_VERSION__": JSON.stringify(env.npm_package_version),
+        "__PACKAGE_VERSION__": JSON.stringify(env.npm_package_version),
+        "__RELEASE_YEAR__": 2025,
     }
 })
