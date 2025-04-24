@@ -27,7 +27,7 @@
     {#each Object.entries(appData.services) as [serviceKey, serviceName]}
         <div class="mt-4">
             <h3 class="text-stablue font-bold text-lg flex gap-1.5 items-center">
-                <div class="size-4 rounded-full bg-green-500" title="Last check 5min ago"></div> {serviceName}
+                <span class="size-4 rounded-full bg-green-500" title="Last check 5min ago"></span> {serviceName}
             </h3>
             <div class="p-4 rounded bg-stasoftblue mt-2 h-12 items-center gap-1.5 justify-center grid grid-cols-12">
                 {#each {length: 12} as _, i}
