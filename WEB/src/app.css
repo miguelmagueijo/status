@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+@theme {
+    --color-stagreen: #5cff5c;
+    --color-stablue: #00B9B9;
+    --color-stadarkblue: #132533;
+    --color-stasoftblue: #204059;
+    --color-homcaramel: #ffbd72;
+    --color-hombrown: #1a1313;
+}
