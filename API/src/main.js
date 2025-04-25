@@ -58,7 +58,7 @@ class JobConfig {
 
         try {
             const res = await fetch(this.url, {
-                method: "GET",
+                method: "HEAD",
                 headers: {
                     "X-IS-MM-STATUS-JOB": "1",
                 },
@@ -254,7 +254,7 @@ fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
     const uptimeStmt = db.prepare(`
         SELECT ROUND(SUM(CASE WHEN status_code = 200 THEN 1.0 ELSE 0.0 END) / count(id) * 100, 5) AS uptime_percentage
         FROM status
-        WHERE created_at > datetime(?, '-45 days') AND app = ? AND service = ?
+        WHERE created_at >= datetime(?, '-45 days') AND app = ? AND service = ?
         GROUP BY app, service;
     `);
 
