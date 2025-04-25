@@ -15,7 +15,7 @@
 }
 
 .status-ball {
-    @apply size-4 rounded-full;
+    @apply size-4 rounded-full bg-white/50;
 }
 
 .status-text {
@@ -34,6 +34,10 @@
     @apply bg-green-500;
 }
 
+.time-mark.purple, .status-ball.purple {
+    @apply bg-violet-600;
+}
+
 .status-text.red {
     @apply text-red-600;
 }
@@ -44,4 +48,8 @@
 
 .status-text.green {
     @apply text-green-500;
+}
+
+.status-text.purple {
+    @apply text-violet-600;
 }

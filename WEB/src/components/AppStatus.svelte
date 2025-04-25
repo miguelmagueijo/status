@@ -13,25 +13,46 @@
     interface JobConfig {
         job: NodeJS.Timeout | null;
         isSuspended: boolean;
-        isClientSideSuspended: boolean;
     }
 
     const {appKey, appData, days}: Props = $props();
     const jobs: {[key: string]: JobConfig} = {}
+    const redLimit = 60;
+    const yellowLimit = 90;
+    const refreshSecondsWait = 30;
 
     function getAppServiceElementId(appKey: string, serviceKey: string, suffix: string) {
         return `${appKey}-${serviceKey}-${suffix}`;
+    }
+
+    function resetAppServiceStatusVisuals(appKey: string, serviceKey: string, classToRemove: string, btnToHide: string) {
+        const ballElement = document.getElementById(getAppServiceElementId(appKey, serviceKey, `ball`))!;
+        const statusMsgElement = document.getElementById(getAppServiceElementId(appKey, serviceKey, `status`))!;
+        const uptimeElement = document.getElementById(getAppServiceElementId(appKey, serviceKey, `uptime`))!;
+
+        ballElement.classList.remove(classToRemove);
+        ballElement.title = "";
+
+        statusMsgElement.classList.remove(classToRemove);
+        statusMsgElement.title = "";
+        statusMsgElement.innerText = "-";
+
+        uptimeElement.classList.remove(classToRemove);
+        uptimeElement.title = "";
+        uptimeElement.innerText = "-";
+
+        document.getElementById(getAppServiceElementId(appKey, serviceKey, btnToHide))!.classList.add("hidden");
     }
 
     function statusRecordHandler(prefixID: string, statusRecord: AppServiceStatus) {
         const percentage = statusRecord.total_success / statusRecord.total_checks * 100;
         const element = document.getElementById(prefixID + String(statusRecord.record_id))!;
 
-        if (percentage < 70) {
+        if (percentage <= redLimit) {
             element.classList.remove("green");
             element.classList.remove("yellow");
             element.classList.add("red");
-        } else if (percentage < 90) {
+        } else if (percentage <= yellowLimit) {
             element.classList.remove("green");
             element.classList.remove("red");
             element.classList.add("yellow");
@@ -49,11 +70,14 @@
 
         uptimeElement.innerHTML = `${uptime}`;
 
-        if (uptime < 70) {
+        ballElement.title = statusMsgElement.title = `Last check made on: ${new Date().toLocaleString("en-UK")}`;
+        uptimeElement.title = "Based on the last 45 days";
+
+        if (uptime <= redLimit) {
             uptimeElement.classList.remove("green");
             uptimeElement.classList.remove("yellow");
             uptimeElement.classList.add("red");
-        } else if (uptime < 90){
+        } else if (uptime <= yellowLimit){
             uptimeElement.classList.remove("green");
             uptimeElement.classList.remove("red");
             uptimeElement.classList.add("yellow");
@@ -76,6 +100,44 @@
             statusMsgElement.classList.add("red");
             statusMsgElement.innerHTML = "DOWN";
         }
+    }
+
+    function unsuspendRequests(appKey: string, serviceKey: string) {
+        resetAppServiceStatusVisuals(appKey, serviceKey, "purple", "refresh-btn");
+        executeRequest(appKey, serviceKey);
+
+        (document.getElementById(getAppServiceElementId(appKey, serviceKey, "refresh-btn"))! as HTMLButtonElement).disabled = true;
+        setTimeout(() => {
+            (document.getElementById(getAppServiceElementId(appKey, serviceKey, "refresh-btn"))! as HTMLButtonElement).disabled = false;
+        }, refreshSecondsWait * 1000);
+    }
+
+    function suspendRequests(appKey: string, serviceKey: string) {
+        const ballElement = document.getElementById(getAppServiceElementId(appKey, serviceKey, `ball`))!;
+        const statusMsgElement = document.getElementById(getAppServiceElementId(appKey, serviceKey, `status`))!;
+        const uptimeElement = document.getElementById(getAppServiceElementId(appKey, serviceKey, `uptime`))!;
+
+        ballElement.classList.remove("green");
+        ballElement.classList.remove("red");
+        ballElement.classList.remove("yellow");
+        ballElement.classList.add("purple");
+        ballElement.title = "This service is suspended";
+
+        statusMsgElement.classList.remove("green");
+        statusMsgElement.classList.remove("red");
+        statusMsgElement.classList.remove("yellow");
+        statusMsgElement.classList.add("purple");
+        statusMsgElement.title = "This service is suspended";
+        statusMsgElement.innerText = "SUSPENDED";
+
+        uptimeElement.classList.remove("green");
+        uptimeElement.classList.remove("red");
+        uptimeElement.classList.remove("yellow");
+        uptimeElement.classList.add("purple");
+        uptimeElement.title = "This service is suspended";
+        uptimeElement.innerText = "SUSPENDED";
+
+        document.getElementById(getAppServiceElementId(appKey, serviceKey, "refresh-btn"))!.classList.remove("hidden");
     }
 
     async function executeRequest(appKey: string, serviceKey: string) {
@@ -106,9 +168,13 @@
 
             if (!jobConfig.isSuspended) {
                 jobConfig.job = setTimeout(() => executeRequest(appKey, serviceKey), 310000);
+            } else {
+                suspendRequests(appKey, serviceKey);
             }
         } catch (e) {
             console.error(e);
+            suspendRequests(appKey, serviceKey);
+            jobConfig.isSuspended = true;
         }
     }
 
@@ -116,8 +182,7 @@
         for (const serviceKey of Object.keys(appData.services)) {
             jobs[`${appKey}-${serviceKey}`] = {
                 job: null,
-                isSuspended: false,
-                isClientSideSuspended: false,
+                isSuspended: false
             };
 
             executeRequest(appKey, serviceKey);
@@ -130,8 +195,8 @@
         <h2 class="text-2xl font-bold">
             {appData.name}
         </h2>
-        {#if appData.visit_url}
-            <a href="{appData.visit_url}" class="text-sm flex gap-0.5 hover:underline opacity-25" target="_blank">
+        {#if appData.url}
+            <a href="{appData.url}" class="text-sm flex gap-0.5 hover:underline" target="_blank">
                 <span>Take me there</span>
                 <Icon icon="mingcute:arrow-right-up-fill"/>
             </a>
@@ -143,6 +208,12 @@
                 <span id={getAppServiceElementId(appKey, serviceKey, "ball")}
                       class="status-ball" title="Last check 5min ago"></span>
                 {serviceName}
+                <button id={getAppServiceElementId(appKey, serviceKey, "refresh-btn")}
+                        type="button"
+                        onclick={() => unsuspendRequests(appKey, serviceKey)}
+                        class="bg-violet-600 p-1 rounded text-white font-bold cursor-pointer text-xs ml-2 group disabled:pointer-events-none disabled:bg-gray-500 hidden">
+                    <Icon icon="ic:round-refresh" class="size-5 group-hover:rotate-180 duration-300"/>
+                </button>
             </h3>
             <div class="p-4 rounded bg-stasoftblue mt-2 h-12 items-center gap-1.5 justify-center grid grid-cols-13">
                 {#each getLastHoursIntervals(13).reverse() as interval, i}
@@ -183,7 +254,8 @@
                     <span class="text-xs">
                         Uptime:
                     </span>
-                    <span id={getAppServiceElementId(appKey, serviceKey, "uptime")} class="status-text">-</span>
+                    <span id={getAppServiceElementId(appKey, serviceKey, "uptime")} class="status-text"
+                          title="Based on the last 45 days">-</span>
                     <span class="font-semibold text-xs opacity-50">%</span>
                 </div>
                 <div>

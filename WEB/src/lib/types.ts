@@ -4,7 +4,7 @@ export interface ServicesData {
 
 export interface AppData {
     name: string;
-    visit_url: string | null,
+    url: string | null,
     services: ServicesData
 }
 
