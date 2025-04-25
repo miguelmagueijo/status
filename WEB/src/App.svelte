@@ -14,8 +14,17 @@
     let isLoading = true;
     let isApiError = false;
     let appConfig: AppConfig | null = null;
+    let updateDatetimeJob: NodeJS.Timeout | undefined = undefined;
+
+    function updateDatetimes() {
+        document.getElementById("utc-datetime")!.innerText = new Date().toLocaleString("en-UK", {timeZone: "utc"}).slice(0, -3);
+        document.getElementById("client-datetime")!.innerText = new Date().toLocaleString("en-UK").slice(0, -3);
+    }
 
     onMount(async () => {
+        updateDatetimes();
+        updateDatetimeJob = setInterval(updateDatetimes, 60000);
+
         try {
             const res = await fetch(`${import.meta.env.VITE_API_URL}/apps-and-services`);
 
@@ -52,6 +61,22 @@
     <h1 class="font-bold text-4xl text-stagreen text-center">
         APPS & SERVICES STATUS
     </h1>
+    <p class="text-center opacity-50">
+        Times shown in this page are in UTC timezone
+    </p>
+    <div class="text-center opacity-50 flex mx-auto w-fit">
+        <div>
+            UTC
+            <br/>
+            <span id="utc-datetime"></span>
+        </div>
+        <div class="w-0.5 rounded h-4 my-auto bg-white mx-6"></div>
+        <div>
+            Yours
+            <br/>
+            <span id="client-datetime"></span>
+        </div>
+    </div>
     {#if isApiError}
         <ErrorMsg boldText="HA!<br/>This is funny, it seems like the API is unavailable."
                   lowerText="Please contact the administrator." />
