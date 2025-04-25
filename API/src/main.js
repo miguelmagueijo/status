@@ -27,7 +27,8 @@ class JobConfig {
         this.serviceName = serviceName;
         this.url = url;
 
-        // this.job = setInterval(() => this.updateServiceStatus(), this.jobInterval * 1000);
+        this.updateServiceStatus();
+        this.job = setInterval(() => this.updateServiceStatus(), this.jobInterval * 1000);
     }
 
     restartService() {
@@ -222,20 +223,22 @@ fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
     // Hour
     const hoursStmt = db.prepare(`
         SELECT strftime('%Y/%m/%d %H', created_at)                 AS date_id,
+               strftime('%H', ?) - strftime('%H', created_at)      AS record_id,
                count(id)                                           AS total_checks,
                SUM(CASE WHEN status_code = 200 THEN 1 ELSE 0 END)  AS total_success,
                SUM(CASE WHEN status_code != 200 THEN 1 ELSE 0 END) AS total_fail
         FROM status
-        WHERE created_at > datetime(?, '-12 hours') AND app = ? AND service = ?
+        WHERE created_at > datetime(?, '-13 hours') AND app = ? AND service = ?
         GROUP BY date_id
         ORDER BY date_id DESC;
     `);
 
-    const hoursData = hoursStmt.all(now, jobConfig.appName, jobConfig.serviceName);
+    const hoursData = hoursStmt.all(now, now, jobConfig.appName, jobConfig.serviceName);
 
     // Days
     const daysStmt = db.prepare(`
         SELECT date(created_at)                                    AS date_id,
+               julianday(date(?)) - julianday(date(created_at))    AS record_id,
                count(id)                                           AS total_checks,
                SUM(CASE WHEN status_code = 200 THEN 1 ELSE 0 END)  AS total_success,
                SUM(CASE WHEN status_code != 200 THEN 1 ELSE 0 END) AS total_fail
@@ -245,7 +248,7 @@ fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
         ORDER BY date_id DESC;
     `);
 
-    const daysData = daysStmt.all(now, now, jobConfig.appName, jobConfig.serviceName);
+    const daysData = daysStmt.all(now, now, now, jobConfig.appName, jobConfig.serviceName);
 
     // Uptime
     const uptimeStmt = db.prepare(`
@@ -266,7 +269,7 @@ fastify.get("/v1/status/:app_id/:service_id", async (request, reply) => {
         message: "Successfully got the status",
         isAlive: jobConfig.isAlive,
         isSuspended: jobConfig.isSuspended,
-        hourData: hoursData,
+        hoursData: hoursData,
         daysData: daysData,
         uptimePercentage: uptimePercentage,
     };
