@@ -5,7 +5,7 @@ export interface ServicesData {
 export interface AppData {
     name: string;
     visit_url: string | null,
-    services: Array<ServicesData>
+    services: ServicesData
 }
 
 export interface AppsMap {

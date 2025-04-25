@@ -6,6 +6,7 @@
     import AppStatus from "./components/AppStatus.svelte";
     import {onMount} from "svelte";
     import type {AppConfig} from "./lib/types";
+    import ErrorMsg from "./components/ErrorMsg.svelte";
 
     const currentYear = new Date().getFullYear();
     const ccYear = __RELEASE_YEAR__ === currentYear ? __RELEASE_YEAR__ : `${__RELEASE_YEAR__}-${currentYear}`;
@@ -16,7 +17,7 @@
 
     onMount(async () => {
         try {
-            const res = await fetch("http://localhost:3000/v1/apps-and-services");
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/apps-and-services`);
 
             if (res.status !== 200) {
                 throw new Error();
@@ -52,15 +53,8 @@
         APPS & SERVICES STATUS
     </h1>
     {#if isApiError}
-        <div class="w-fit mx-auto bg-stadarkblue p-10 text-red-400 text-center rounded border-2 border-stablue/25 mt-10">
-            <Icon icon="material-symbols:error" class="mx-auto size-16 mb-4"/>
-            <p class="text-lg">
-                <b>HA!<br/>This is funny, it seems like the API is unavailable.</b>
-            </p>
-            <p>
-                Please contact the administrator.
-            </p>
-        </div>
+        <ErrorMsg boldText="HA!<br/>This is funny, it seems like the API is unavailable."
+                  lowerText="Please contact the administrator." />
     {:else}
         {#if isLoading}
             <div class="text-center mt-20">
@@ -75,9 +69,8 @@
                     <AppStatus {appKey} {appData} days={appConfig.days}/>
                 {/each}
             {:else}
-                <p>
-                    This message shouldn't appear.
-                </p>
+                <ErrorMsg boldText="Oops, seems like I couldn't build the page..."
+                          lowerText="Please contact the administrator." />
             {/if}
         {/if}
     {/if}
