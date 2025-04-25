@@ -8,3 +8,40 @@
     --color-homcaramel: #ffbd72;
     --color-hombrown: #1a1313;
 }
+
+.time-mark {
+    @apply rounded bg-white/50;
+    height: 100%;
+}
+
+.status-ball {
+    @apply size-4 rounded-full;
+}
+
+.status-text {
+    @apply font-semibold;
+}
+
+.time-mark.red, .status-ball.red {
+    @apply bg-red-600;
+}
+
+.time-mark.yellow, .status-ball.yellow {
+    @apply bg-yellow-500;
+}
+
+.time-mark.green, .status-ball.green {
+    @apply bg-green-500;
+}
+
+.status-text.red {
+    @apply text-red-600;
+}
+
+.status-text.yellow {
+    @apply text-yellow-500;
+}
+
+.status-text.green {
+    @apply text-green-500;
+}
